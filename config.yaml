@@ -25,23 +25,31 @@ curation:
   # Guidance handed to the model about what "notable" means for YOU.
   notability: >
     Prioritise genuinely novel results, strong empirical work, influential
-    threads, and launches that a researcher working on these topics would
-    want to know about today. Deprioritise incremental papers, marketing,
-    and rehashes. It's fine to return fewer than max_items if little is notable.
+    threads, and launches that a researcher working on these topics would want
+    to know about today. Give extra weight to new benchmarks and evaluation
+    methods, agentic simulation environments, reward design and reward hacking,
+    and rigorous medical/health AI results. Deprioritise incremental papers,
+    marketing, and rehashes. It's fine to return fewer than max_items if little
+    is notable.
 
 # Your interests, in your own words. The model reads these verbatim.
 topics:
-  - AI coaching (LLMs as coaches / advisors / tutors)
-  - User simulations and simulated users for evaluating agents
-  - Benchmarks and evaluations for LLMs and agents
-  - Reward hacking and specification gaming
-  - Long-horizon tasks, planning, and long-horizon simulations
-  - Evolving / dynamic / learned reward functions
-  - AI for fitness, exercise, and physical training
-  - AI for health and healthcare
-  - AI for women's health (femtech, reproductive/hormonal health)
-  - LLM agents (tool use, multi-agent, autonomy)
-  - Long-term memory for AI / agents
+  - Health-coaching AI and personal health assistants (LLMs as coaches / advisors)
+  - Simulation environments for benchmarking agentic capabilities (hermetic envs, agent evals)
+  - LLM & agent benchmarks and evaluation methodology, especially medical/health and benchmark saturation
+  - Reward design for RL from environments — non-hackable reward signals, reward hacking, specification gaming
+  - Learning from agent trajectories — golden trajectories, SFT and RL-tuning of agents
+  - Sycophancy and collusion-resistance in LLMs (anti-sycophancy, resisting user pressure)
+  - Calibration, uncertainty, and honest / calibrated data use in LLMs
+  - Long-term personalisation, memory, and longitudinal multi-session agents; elicitation via conversation
+  - User simulation / simulated users for evaluating coaching and assistant agents
+  - Medical and clinical LLMs, health Q&A, and health prediction
+  - Wearable and sensor ML / digital biomarkers (HR, accelerometer); large sensor models
+  - In-workout coaching: pose estimation, real-time form correction, multimodal feedback
+  - Health artifact generation (plans / programs) and agent-native health UX
+  - AI safety in health — risk detection, triage, referral and routing
+  - AI for women's health (femtech, reproductive / hormonal health)
+  - LLM agents: tool use, multi-agent, long-horizon autonomy
 
 sources:
   # Research papers — pulled from the arXiv API by category.
@@ -49,10 +57,12 @@ sources:
     categories:
       - cs.AI   # Artificial Intelligence
       - cs.CL   # Computation & Language (NLP / LLMs)
-      - cs.LG   # Machine Learning
+      - cs.LG   # Machine Learning (incl. RL, reward design)
       - cs.MA   # Multi-Agent Systems
       - cs.HC   # Human-Computer Interaction (coaching, health UX)
-    max_results: 80   # newest N papers across the categories above
+      - cs.CV   # Computer Vision (pose estimation, form correction)
+      - eess.SP # Signal Processing (wearables, sensor ML, biosignals)
+    max_results: 90   # newest N papers across the categories above
 
   # News, articles, blogs, newsletters, and release feeds (RSS/Atom).
   # Add or remove freely — anything with a feed URL works.
@@ -81,6 +91,14 @@ sources:
       url: https://www.nature.com/natmachintell.rss
     - name: Science — News
       url: https://www.science.org/rss/news_current.xml
+    - name: Google Research Blog
+      url: https://research.google/blog/rss/
+    - name: Nature Medicine
+      url: https://www.nature.com/nm.rss
+    - name: npj Digital Medicine
+      url: https://www.nature.com/npjdigitalmed.rss
+    - name: The Lancet Digital Health
+      url: https://www.thelancet.com/rssfeed/landig_current.xml
     - name: STAT News — Health Tech
       url: https://www.statnews.com/category/health-tech/feed/
     - name: TechCrunch — Femtech
