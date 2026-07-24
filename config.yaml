@@ -8,7 +8,7 @@ email:
   # The "from" address MUST be on a domain you've verified in Resend
   # (or use onboarding@resend.dev for testing — it can only send to your own
   # Resend account email). See README for setup.
-  from: "Daily Digest <digest@yourdomain.com>"
+  from: "onboarding@resend.dev"
   subject_prefix: "🧠 Daily Digest"
 
 send_time:
