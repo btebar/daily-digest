@@ -77,7 +77,9 @@ def curate(items: list[Item], config: dict) -> dict:
         "'Evals & reward hacking') and a single-sentence one_liner. Do NOT repeat "
         "any id that appears in featured.\n\n"
         "Use each item's 'id' exactly as given. Rank most notable first. If little "
-        "is truly notable, return fewer.\n\n"
+        "is truly notable, return fewer. When quality and relevance are comparable, "
+        "favour a mix of sources (papers, articles, and discussions) rather than "
+        "selecting only papers.\n\n"
         f"CANDIDATES:\n{catalogue}"
     )
 

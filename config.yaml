@@ -69,6 +69,21 @@ sources:
       url: https://importai.substack.com/feed
     - name: STAT News — Health Tech
       url: https://www.statnews.com/category/health-tech/feed/
+    - name: TechCrunch — Femtech
+      url: https://techcrunch.com/tag/femtech/feed/
     # Example GitHub releases feed (uncomment / edit for repos you follow):
     # - name: vLLM releases
     #   url: https://github.com/vllm-project/vllm/releases.atom
+
+  # Reddit — top posts of the day from each subreddit (best-effort; Reddit
+  # rate-limits, so an occasional skipped sub is normal). Remove any that
+  # don't exist or that you don't want.
+  reddit:
+    top_period: day   # hour | day | week
+    per_sub: 12
+    subreddits:
+      - MachineLearning
+      - LocalLLaMA
+      - artificial
+      - QuantifiedSelf
+      - femtech

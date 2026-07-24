@@ -13,14 +13,19 @@ import requests
 _HEADERS = {"User-Agent": "daily-digest/1.0 (+https://github.com)"}
 
 
-def _fetch_feed(url: str):
+def _fetch_feed(url: str, retries: int = 0):
     """Fetch a URL with requests (bundled CA certs) and hand bytes to feedparser.
 
     Using requests avoids macOS/urllib SSL 'CERTIFICATE_VERIFY_FAILED' issues
-    that bite local runs; on CI it behaves identically."""
-    resp = requests.get(url, headers=_HEADERS, timeout=30)
-    resp.raise_for_status()
-    return feedparser.parse(resp.content)
+    that bite local runs; on CI it behaves identically. `retries` adds a short
+    backoff on HTTP 429 (Reddit rate-limits aggressively)."""
+    for attempt in range(retries + 1):
+        resp = requests.get(url, headers=_HEADERS, timeout=30)
+        if resp.status_code == 429 and attempt < retries:
+            time.sleep(3 * (attempt + 1))
+            continue
+        resp.raise_for_status()
+        return feedparser.parse(resp.content)
 
 
 @dataclass
@@ -106,6 +111,38 @@ def collect_rss(feeds: list[dict], cutoff: datetime) -> list[Item]:
     return [i for i in items if _recent(i, cutoff)]
 
 
+def collect_reddit(cfg: dict, cutoff: datetime) -> list[Item]:
+    subs = cfg.get("subreddits", [])
+    period = cfg.get("top_period", "day")
+    per_sub = cfg.get("per_sub", 12)
+    items: list[Item] = []
+    for i, sub in enumerate(subs):
+        if i:  # be polite between requests — Reddit rate-limits hard
+            time.sleep(2)
+        url = f"https://www.reddit.com/r/{sub}/top/.rss?t={period}&limit={per_sub}"
+        try:
+            parsed = _fetch_feed(url, retries=2)
+        except Exception as exc:  # 429/403/404 on one sub shouldn't kill the run
+            print(f"  ! failed to fetch r/{sub}: {exc}")
+            continue
+        for e in parsed.entries:
+            published = _struct_to_dt(getattr(e, "published_parsed", None))
+            summary = getattr(e, "summary", "") or getattr(e, "content", "")
+            if isinstance(summary, list):  # feedparser sometimes wraps content
+                summary = summary[0].get("value", "") if summary else ""
+            items.append(
+                Item(
+                    title=" ".join(getattr(e, "title", "").split()),
+                    url=getattr(e, "link", ""),
+                    source=f"r/{sub}",
+                    kind="discussion",
+                    published=published,
+                    summary=" ".join(str(summary).split())[:400],
+                )
+            )
+    return [i for i in items if _recent(i, cutoff)]
+
+
 def collect_all(config: dict) -> list[Item]:
     lookback = config["curation"]["lookback_hours"]
     cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback)
@@ -124,6 +161,12 @@ def collect_all(config: dict) -> list[Item]:
     if rss:
         found = collect_rss(rss, cutoff)
         print(f"  RSS:   {len(found)} recent articles")
+        items += found
+
+    reddit = sources.get("reddit")
+    if reddit and reddit.get("subreddits"):
+        found = collect_reddit(reddit, cutoff)
+        print(f"  Reddit: {len(found)} recent posts")
         items += found
 
     # Dedupe by normalised URL, keep first seen.
