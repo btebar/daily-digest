@@ -22,4 +22,11 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-        run: python -m digest.main
+        # Manual "Run workflow" sends immediately (--force); scheduled runs
+        # respect the 7 AM UK send-time gate.
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python -m digest.main --force
+          else
+            python -m digest.main
+          fi
