@@ -61,12 +61,26 @@ sources:
       url: https://deepmind.google/blog/rss.xml
     - name: OpenAI News
       url: https://openai.com/news/rss.xml
+    - name: Hugging Face Blog
+      url: https://huggingface.co/blog/feed.xml
+    - name: Simon Willison (LLMs)
+      url: https://simonwillison.net/atom/everything/
     - name: MIT Technology Review — AI
       url: https://www.technologyreview.com/topic/artificial-intelligence/feed
+    - name: The Verge — AI
+      url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+    - name: VentureBeat — AI
+      url: https://venturebeat.com/category/ai/feed/
+    - name: WIRED — AI
+      url: https://www.wired.com/feed/tag/ai/latest/rss
     - name: Ars Technica — AI
       url: https://arstechnica.com/ai/feed/
     - name: Import AI (Jack Clark)
       url: https://importai.substack.com/feed
+    - name: Nature Machine Intelligence
+      url: https://www.nature.com/natmachintell.rss
+    - name: Science — News
+      url: https://www.science.org/rss/news_current.xml
     - name: STAT News — Health Tech
       url: https://www.statnews.com/category/health-tech/feed/
     - name: TechCrunch — Femtech
@@ -75,9 +89,9 @@ sources:
     # - name: vLLM releases
     #   url: https://github.com/vllm-project/vllm/releases.atom
 
-  # Reddit — top posts of the day from each subreddit (best-effort; Reddit
-  # rate-limits, so an occasional skipped sub is normal). Remove any that
-  # don't exist or that you don't want.
+  # Reddit — top posts of the day from each subreddit, via the official API.
+  # Requires REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET (see README). If those
+  # aren't set, Reddit is simply skipped. Remove any subs you don't want.
   reddit:
     top_period: day   # hour | day | week
     per_sub: 12

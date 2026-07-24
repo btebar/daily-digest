@@ -50,8 +50,25 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 
 - `GEMINI_API_KEY`
 - `RESEND_API_KEY`
+- `REDDIT_CLIENT_ID` *(optional — enables Reddit; see below)*
+- `REDDIT_CLIENT_SECRET` *(optional)*
 
 That's it — the workflow runs itself every morning at **7 AM UK time**.
+
+### Optional: enable Reddit (official API)
+
+Reddit as a source needs a free API app (reliable, not rate-limited like the
+public RSS):
+
+1. Go to https://www.reddit.com/prefs/apps → **Create another app…**
+2. Choose type **script**, give it any name, set redirect URI to
+   `http://localhost` (unused), and create it.
+3. Copy the **client ID** (the string under the app name) and the **secret**.
+4. Add them as repo secrets `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET`
+   (or `export` them locally for `--dry-run`).
+
+Edit the subreddit list under `sources.reddit` in `config.yaml`. Skip this step
+entirely and Reddit is just left out.
 
 ## Test it now
 

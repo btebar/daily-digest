@@ -22,6 +22,9 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Optional — enables Reddit as a source. Omit and Reddit is skipped.
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
         # Manual "Run workflow" sends immediately (--force); scheduled runs
         # respect the 7 AM UK send-time gate.
         run: |

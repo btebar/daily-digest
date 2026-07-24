@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import time
 import urllib.parse
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import feedparser
@@ -111,33 +112,61 @@ def collect_rss(feeds: list[dict], cutoff: datetime) -> list[Item]:
     return [i for i in items if _recent(i, cutoff)]
 
 
+def _reddit_token(client_id: str, client_secret: str) -> str:
+    """App-only OAuth (client_credentials): read-only access, 100 req/min."""
+    resp = requests.post(
+        "https://www.reddit.com/api/v1/access_token",
+        auth=(client_id, client_secret),
+        data={"grant_type": "client_credentials"},
+        headers=_HEADERS,
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
+
 def collect_reddit(cfg: dict, cutoff: datetime) -> list[Item]:
+    client_id = os.environ.get("REDDIT_CLIENT_ID")
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
+    if not (client_id and client_secret):
+        print("  Reddit: skipped (REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET not set)")
+        return []
+
+    try:
+        token = _reddit_token(client_id, client_secret)
+    except Exception as exc:
+        print(f"  ! Reddit auth failed: {exc}")
+        return []
+    headers = {**_HEADERS, "Authorization": f"bearer {token}"}
+
     subs = cfg.get("subreddits", [])
     period = cfg.get("top_period", "day")
     per_sub = cfg.get("per_sub", 12)
     items: list[Item] = []
-    for i, sub in enumerate(subs):
-        if i:  # be polite between requests — Reddit rate-limits hard
-            time.sleep(2)
-        url = f"https://www.reddit.com/r/{sub}/top/.rss?t={period}&limit={per_sub}"
+    for sub in subs:
+        url = f"https://oauth.reddit.com/r/{sub}/top?t={period}&limit={per_sub}"
         try:
-            parsed = _fetch_feed(url, retries=2)
-        except Exception as exc:  # 429/403/404 on one sub shouldn't kill the run
+            resp = requests.get(url, headers=headers, timeout=30)
+            resp.raise_for_status()
+            children = resp.json().get("data", {}).get("children", [])
+        except Exception as exc:  # a bad/private sub shouldn't kill the run
             print(f"  ! failed to fetch r/{sub}: {exc}")
             continue
-        for e in parsed.entries:
-            published = _struct_to_dt(getattr(e, "published_parsed", None))
-            summary = getattr(e, "summary", "") or getattr(e, "content", "")
-            if isinstance(summary, list):  # feedparser sometimes wraps content
-                summary = summary[0].get("value", "") if summary else ""
+        for c in children:
+            p = c.get("data", {})
+            created = p.get("created_utc")
+            published = (
+                datetime.fromtimestamp(created, tz=timezone.utc) if created else None
+            )
             items.append(
                 Item(
-                    title=" ".join(getattr(e, "title", "").split()),
-                    url=getattr(e, "link", ""),
+                    title=" ".join((p.get("title") or "").split()),
+                    # Link to the Reddit discussion, not the external URL.
+                    url="https://www.reddit.com" + p.get("permalink", ""),
                     source=f"r/{sub}",
                     kind="discussion",
                     published=published,
-                    summary=" ".join(str(summary).split())[:400],
+                    summary=" ".join((p.get("selftext") or "").split())[:400],
                 )
             )
     return [i for i in items if _recent(i, cutoff)]
@@ -166,7 +195,8 @@ def collect_all(config: dict) -> list[Item]:
     reddit = sources.get("reddit")
     if reddit and reddit.get("subreddits"):
         found = collect_reddit(reddit, cutoff)
-        print(f"  Reddit: {len(found)} recent posts")
+        if found:
+            print(f"  Reddit: {len(found)} recent posts")
         items += found
 
     # Dedupe by normalised URL, keep first seen.
