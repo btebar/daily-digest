@@ -1,0 +1,25 @@
+name: Daily Digest
+
+on:
+  schedule:
+    # GitHub cron is UTC and does NOT observe DST. 7 AM UK is 06:00 UTC in
+    # summer (BST) and 07:00 UTC in winter (GMT), so we fire at both and the
+    # script (should_run_now) proceeds only when it's actually 7 AM in London.
+    - cron: "0 6 * * *"
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}   # allow manual "Run workflow" from the Actions tab
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Build and send digest
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: python -m digest.main

@@ -1,0 +1,74 @@
+# ─────────────────────────────────────────────────────────────
+# Daily Digest configuration
+# Edit this file to change topics, sources, delivery, and model.
+# ─────────────────────────────────────────────────────────────
+
+email:
+  to: blancatjm@gmail.com
+  # The "from" address MUST be on a domain you've verified in Resend
+  # (or use onboarding@resend.dev for testing — it can only send to your own
+  # Resend account email). See README for setup.
+  from: "Daily Digest <digest@yourdomain.com>"
+  subject_prefix: "🧠 Daily Digest"
+
+send_time:
+  hour: 7                 # 7 AM...
+  timezone: Europe/London # ...UK time (DST-safe; see main.py)
+
+curation:
+  model: gemini-flash-latest  # alias that tracks the current stable Flash;
+                              # use gemini-pro-latest for sharper curation.
+                              # Run `python -m digest.list_models` to see exactly
+                              # which model names your API key supports.
+  max_items: 12           # max items in the email
+  lookback_hours: 30      # only consider items published in this window
+  # Guidance handed to the model about what "notable" means for YOU.
+  notability: >
+    Prioritise genuinely novel results, strong empirical work, influential
+    threads, and launches that a researcher working on these topics would
+    want to know about today. Deprioritise incremental papers, marketing,
+    and rehashes. It's fine to return fewer than max_items if little is notable.
+
+# Your interests, in your own words. The model reads these verbatim.
+topics:
+  - AI coaching (LLMs as coaches / advisors / tutors)
+  - User simulations and simulated users for evaluating agents
+  - Benchmarks and evaluations for LLMs and agents
+  - Reward hacking and specification gaming
+  - Long-horizon tasks, planning, and long-horizon simulations
+  - Evolving / dynamic / learned reward functions
+  - AI for fitness, exercise, and physical training
+  - AI for health and healthcare
+  - AI for women's health (femtech, reproductive/hormonal health)
+  - LLM agents (tool use, multi-agent, autonomy)
+  - Long-term memory for AI / agents
+
+sources:
+  # Research papers — pulled from the arXiv API by category.
+  arxiv:
+    categories:
+      - cs.AI   # Artificial Intelligence
+      - cs.CL   # Computation & Language (NLP / LLMs)
+      - cs.LG   # Machine Learning
+      - cs.MA   # Multi-Agent Systems
+      - cs.HC   # Human-Computer Interaction (coaching, health UX)
+    max_results: 80   # newest N papers across the categories above
+
+  # News, articles, blogs, newsletters, and release feeds (RSS/Atom).
+  # Add or remove freely — anything with a feed URL works.
+  rss:
+    - name: Google DeepMind Blog
+      url: https://deepmind.google/blog/rss.xml
+    - name: OpenAI News
+      url: https://openai.com/news/rss.xml
+    - name: MIT Technology Review — AI
+      url: https://www.technologyreview.com/topic/artificial-intelligence/feed
+    - name: Ars Technica — AI
+      url: https://arstechnica.com/ai/feed/
+    - name: Import AI (Jack Clark)
+      url: https://importai.substack.com/feed
+    - name: STAT News — Health Tech
+      url: https://www.statnews.com/category/health-tech/feed/
+    # Example GitHub releases feed (uncomment / edit for repos you follow):
+    # - name: vLLM releases
+    #   url: https://github.com/vllm-project/vllm/releases.atom

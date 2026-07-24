@@ -1,0 +1,123 @@
+"""Use Gemini to select and summarise the most notable items.
+
+Returns two things:
+  - featured: the top ~5 items, each with a clear teaching paragraph
+  - more:     the remaining notable items, grouped by category with a one-liner
+
+The model returns indices into the candidate list (not URLs), so it cannot
+hallucinate links — we map indices back to the real Items ourselves.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
+
+from .collect import Item
+
+
+# Structured-output schema (Gemini validates against these Pydantic models).
+class _Featured(BaseModel):
+    id: int
+    summary: str
+
+
+class _More(BaseModel):
+    id: int
+    category: str
+    one_liner: str
+
+
+class _Curation(BaseModel):
+    featured: list[_Featured]
+    more: list[_More]
+
+
+def _valid(idx, items) -> bool:
+    return isinstance(idx, int) and 0 <= idx < len(items)
+
+
+def curate(items: list[Item], config: dict) -> dict:
+    """Return {"featured": [{item, summary}], "more": [{item, category, one_liner}]}."""
+    if not items:
+        return {"featured": [], "more": []}
+
+    cur = config["curation"]
+    topics = "\n".join(f"- {t}" for t in config["topics"])
+    max_items = cur["max_items"]
+    n_featured = min(5, max_items)
+
+    catalogue = "\n".join(
+        f"[{idx}] ({it.kind}, {it.source}) {it.title}\n     {it.summary[:500]}"
+        for idx, it in enumerate(items)
+    )
+
+    system = (
+        "You are a sharp research analyst curating a personalised daily digest "
+        "for a technical reader who wants to actually learn from it. You are given "
+        "the reader's interests and a list of candidate items (papers, articles, "
+        "releases) from the last day. Select ONLY items that are genuinely notable "
+        f"and relevant. {cur['notability']}"
+    )
+
+    user = (
+        f"READER'S INTERESTS:\n{topics}\n\n"
+        f"Choose at most {max_items} notable items total.\n\n"
+        f"1. featured — pick the {n_featured} most important/interesting of those. "
+        "For each, write a clear, self-contained paragraph (roughly 4-6 sentences) "
+        "that a curious non-expert can learn from: what the work is, the key idea or "
+        "finding in plain language, and why it matters for this reader's interests. "
+        "Avoid jargon; explain any term you must use.\n\n"
+        "2. more — the remaining notable items. For each, give a short natural "
+        "category heading (e.g. 'Agents & memory', 'Health & fitness AI', "
+        "'Evals & reward hacking') and a single-sentence one_liner. Do NOT repeat "
+        "any id that appears in featured.\n\n"
+        "Use each item's 'id' exactly as given. Rank most notable first. If little "
+        "is truly notable, return fewer.\n\n"
+        f"CANDIDATES:\n{catalogue}"
+    )
+
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY (or GOOGLE_API_KEY) is not set")
+    client = genai.Client(api_key=api_key)
+
+    resp = client.models.generate_content(
+        model=cur["model"],
+        contents=user,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            response_mime_type="application/json",
+            response_schema=_Curation,
+        ),
+    )
+    data = json.loads(resp.text)
+
+    featured: list[dict] = []
+    used: set[int] = set()
+    for sel in data.get("featured", [])[:n_featured]:
+        idx = sel.get("id")
+        if not _valid(idx, items) or idx in used:
+            continue
+        used.add(idx)
+        featured.append({"item": items[idx], "summary": sel.get("summary", "")})
+
+    more: list[dict] = []
+    for sel in data.get("more", []):
+        idx = sel.get("id")
+        if not _valid(idx, items) or idx in used:
+            continue
+        used.add(idx)
+        more.append(
+            {
+                "item": items[idx],
+                "category": sel.get("category", "Notable"),
+                "one_liner": sel.get("one_liner", ""),
+            }
+        )
+
+    return {"featured": featured, "more": more[: max_items - len(featured)]}

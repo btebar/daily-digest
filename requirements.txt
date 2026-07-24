@@ -1,0 +1,5 @@
+google-genai>=1.0
+feedparser>=6.0
+requests>=2.31
+resend>=2.0
+PyYAML>=6.0
