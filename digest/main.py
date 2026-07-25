@@ -16,6 +16,7 @@ from .render import render_html, render_text
 from .send import send_email
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
+STATE_PATH = CONFIG_PATH.parent / "state" / "last_sent"
 
 
 def load_config() -> dict:
@@ -23,13 +24,37 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def should_run_now(config: dict) -> bool:
-    """DST-safe gate: GitHub cron runs in UTC and does not shift for BST/GMT,
-    so the workflow fires at two UTC times and we only proceed at the one that
-    is actually the target local hour in the configured timezone."""
+def _today_local(config: dict):
+    return datetime.now(ZoneInfo(config["send_time"]["timezone"])).date()
+
+
+def _last_sent() -> str:
+    try:
+        return STATE_PATH.read_text().strip()
+    except FileNotFoundError:
+        return ""
+
+
+def _record_sent(day: str) -> None:
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text(day + "\n")
+
+
+def send_gate(config: dict) -> tuple[bool, str]:
+    """Decide whether to send now. Returns (send?, reason).
+
+    Robust to GitHub cron jitter/drops: the workflow fires several times through
+    the morning; we send on the FIRST fire at/after the target local hour that
+    hasn't already sent today, and record a per-day marker so later fires no-op.
+    DST-safe because we compare against local (Europe/London) date & hour."""
     st = config["send_time"]
     now_local = datetime.now(ZoneInfo(st["timezone"]))
-    return now_local.hour == st["hour"]
+    today = now_local.date().isoformat()
+    if now_local.hour < st["hour"]:
+        return False, f"before {st['hour']}:00 {st['timezone']}"
+    if _last_sent() == today:
+        return False, f"already sent today ({today})"
+    return True, "ok"
 
 
 def main() -> int:
@@ -42,10 +67,11 @@ def main() -> int:
 
     config = load_config()
 
-    if not args.force and not args.dry_run and not should_run_now(config):
-        st = config["send_time"]
-        print(f"Not {st['hour']}:00 {st['timezone']} yet — skipping.")
-        return 0
+    if not args.force and not args.dry_run:
+        ok, reason = send_gate(config)
+        if not ok:
+            print(f"Skipping — {reason}.")
+            return 0
 
     print("Collecting candidates…")
     items = collect_all(config)
@@ -69,6 +95,8 @@ def main() -> int:
 
     print("Sending…")
     send_email(config, subject, html, text)
+    if not args.force:  # only the scheduled run records the once-per-day marker
+        _record_sent(_today_local(config).isoformat())
     print("Done.")
     return 0
 
