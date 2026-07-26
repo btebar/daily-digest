@@ -21,7 +21,12 @@ curation:
                               # Run `python -m digest.list_models` to see exactly
                               # which model names your API key supports.
   max_items: 12           # max items in the email
-  lookback_hours: 30      # only consider items published in this window
+  lookback_hours: 72      # only consider items published in this window.
+                          # 72h bridges the arXiv weekend gap (arXiv only
+                          # announces Sun–Thu, so a 30h window caught nothing
+                          # on Sat/Sun/Mon). Already-sent items are cached in
+                          # state/seen_urls.json and skipped, so the wider
+                          # window doesn't cause day-to-day repeats.
   # Guidance handed to the model about what "notable" means for YOU.
   notability: >
     Prioritise genuinely novel results, strong empirical work, influential
@@ -29,8 +34,10 @@ curation:
     to know about today. Give extra weight to new benchmarks and evaluation
     methods, agentic simulation environments, reward design and reward hacking,
     and rigorous medical/health AI results. Deprioritise incremental papers,
-    marketing, and rehashes. It's fine to return fewer than max_items if little
-    is notable.
+    marketing, and rehashes — but still surface the best of what's available:
+    aim to fill the digest with the strongest items relative to my interests,
+    even on a quiet day. Only return an empty digest if there are genuinely no
+    items even loosely relevant.
 
 # Your interests, in your own words. The model reads these verbatim.
 topics:

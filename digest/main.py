@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,8 @@ from .send import send_email
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 STATE_PATH = CONFIG_PATH.parent / "state" / "last_sent"
+SEEN_PATH = CONFIG_PATH.parent / "state" / "seen_urls.json"
+SEEN_RETENTION_DAYS = 21  # how long a sent item stays suppressed from repeats
 
 
 def load_config() -> dict:
@@ -38,6 +41,30 @@ def _last_sent() -> str:
 def _record_sent(day: str) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text(day + "\n")
+
+
+def _load_seen() -> dict[str, str]:
+    """Return {url_key: iso_date} of recently-sent items, pruned to retention.
+
+    Lets us widen the collection lookback (to bridge the arXiv weekend gap)
+    without re-sending the same item on consecutive days."""
+    try:
+        data = json.loads(SEEN_PATH.read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=SEEN_RETENTION_DAYS)
+    ).date().isoformat()
+    return {k: v for k, v in data.items() if isinstance(v, str) and v >= cutoff}
+
+
+def _record_seen(keys: list[str]) -> None:
+    seen = _load_seen()
+    today = datetime.now(timezone.utc).date().isoformat()
+    for k in keys:
+        seen[k] = today
+    SEEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SEEN_PATH.write_text(json.dumps(seen, indent=0, sort_keys=True))
 
 
 def send_gate(config: dict) -> tuple[bool, str]:
@@ -76,7 +103,14 @@ def main() -> int:
     print("Collecting candidates…")
     items = collect_all(config)
 
-    print("Curating with Claude…")
+    seen = _load_seen()
+    if seen:
+        before = len(items)
+        items = [it for it in items if it.dedup_key() not in seen]
+        if before != len(items):
+            print(f"  Skipped {before - len(items)} already-sent items")
+
+    print("Curating…")
     result = curate(items, config)
     featured, more = result["featured"], result["more"]
     print(f"  Selected {len(featured)} featured + {len(more)} more")
@@ -95,6 +129,8 @@ def main() -> int:
 
     print("Sending…")
     send_email(config, subject, html, text)
+    # Remember what we actually sent so it isn't repeated in later digests.
+    _record_seen([sel["item"].dedup_key() for sel in featured + more])
     if not args.force:  # only the scheduled run records the once-per-day marker
         _record_sent(_today_local(config).isoformat())
     print("Done.")
