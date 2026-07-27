@@ -5,15 +5,17 @@ on:
     # GitHub cron is UTC and does NOT observe DST, and top-of-hour runs are
     # often delayed or dropped under load. So we fire several times through the
     # morning; the script sends on the FIRST fire at/after 7 AM London that
-    # hasn't already sent today (marker committed back to the repo), and later
-    # fires no-op. This is DST-safe and self-heals if a slot is dropped.
+    # hasn't already sent today (a per-day marker in state/, persisted via the
+    # Actions cache below) and later fires no-op. DST-safe; self-heals if a
+    # slot is dropped.
     - cron: "0 6 * * *"   # 07:00 BST / 06:00 GMT
     - cron: "0 7 * * *"   # 08:00 BST / 07:00 GMT
     - cron: "0 8 * * *"   # 09:00 BST / 08:00 GMT (catch-up)
   workflow_dispatch: {}   # manual "Run workflow" sends immediately
 
+# No write access needed: state is kept in the Actions cache, not committed.
 permissions:
-  contents: write   # allow committing the send marker back
+  contents: read
 
 jobs:
   digest:
@@ -24,6 +26,18 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
+
+      # Persist state/ (last_sent + seen_urls.json) between runs without
+      # committing to git. A unique key per run always saves a fresh cache;
+      # restore-keys pulls the most recent previous one. Losing it (eviction
+      # after ~7 idle days) at worst causes a few repeated items — harmless.
+      - name: Restore digest state
+        uses: actions/cache@v4
+        with:
+          path: state
+          key: digest-state-${{ github.run_id }}
+          restore-keys: |
+            digest-state-
 
       - name: Materialise config.yaml from the CONFIG_YAML variable
         env:
@@ -53,17 +67,4 @@ jobs:
             python -m digest.main --force
           else
             python -m digest.main
-          fi
-
-      - name: Persist send marker
-        if: github.event_name != 'workflow_dispatch'
-        run: |
-          git add state/last_sent state/seen_urls.json 2>/dev/null || true
-          if git diff --cached --quiet -- state/last_sent state/seen_urls.json; then
-            echo "No state change — nothing to commit."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git commit -m "chore: record digest sent $(date -u +%F)"
-            git push
           fi

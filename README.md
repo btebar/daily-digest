@@ -156,10 +156,19 @@ Everything lives in `config.yaml`:
 GitHub Actions cron only runs in UTC and doesn't shift for BST/GMT. The workflow
 fires several times through the morning; `main.send_gate()` checks the real local
 time in your configured timezone and sends on the first fire at/after the target
-hour that hasn't already sent today (a per-day marker is committed back to the
-repo so later fires no-op). To change the time, edit `send_time.hour` in
-`config.yaml` **and** the `cron:` lines in `.github/workflows/digest.yml` to
-bracket it.
+hour that hasn't already sent today (a per-day marker in `state/`) so later fires
+no-op. To change the time, edit `send_time.hour` in `config.yaml` **and** the
+`cron:` lines in `.github/workflows/digest.yml` to bracket it.
+
+### Run state
+
+`state/` holds the once-per-day send marker and the `seen_urls.json` dedup cache.
+It's **not committed** — the workflow persists it between runs via the
+[Actions cache](https://docs.github.com/actions/using-workflows/caching-dependencies-to-speed-up-workflows).
+This keeps `main` free of `chore:` commits and avoids push races between the
+morning's cron fires. If the cache is ever evicted (GitHub drops caches unused
+for ~7 days), the digest simply starts its dedup memory fresh — at worst you see
+a few recently-sent items again. Locally, `state/` is created on first run.
 
 ## Cost
 
