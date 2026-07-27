@@ -19,10 +19,13 @@ from .send import send_email, send_failure_alert
 
 log = logging.getLogger("digest")
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
-STATE_PATH = CONFIG_PATH.parent / "state" / "last_sent"
-SEEN_PATH = CONFIG_PATH.parent / "state" / "seen_urls.json"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_PATH = REPO_ROOT / "config.yaml"
+EXAMPLE_CONFIG_PATH = REPO_ROOT / "config.example.yaml"
+STATE_PATH = REPO_ROOT / "state" / "last_sent"
+SEEN_PATH = REPO_ROOT / "state" / "seen_urls.json"
 SEEN_RETENTION_DAYS = 21  # how long a sent item stays suppressed from repeats
+PLACEHOLDER_EMAIL = "you@example.com"  # must be changed before a real send
 
 
 def _configure_logging() -> None:
@@ -34,8 +37,23 @@ def _configure_logging() -> None:
 
 
 def load_config() -> dict:
-    with open(CONFIG_PATH, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """Load config.yaml, falling back to the committed config.example.yaml.
+
+    config.yaml is gitignored and personal; a fresh clone (or a CI run before
+    the CONFIG_YAML variable is materialised) still loads the example so the
+    error message is clear rather than a bare FileNotFoundError."""
+    path = CONFIG_PATH if CONFIG_PATH.is_file() else EXAMPLE_CONFIG_PATH
+    with open(path, encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    if not config:
+        raise RuntimeError(f"{path.name} is empty or invalid YAML")
+    if config.get("email", {}).get("to") == PLACEHOLDER_EMAIL:
+        raise RuntimeError(
+            "config email.to is still the placeholder. Set your own config: copy "
+            "config.example.yaml to config.yaml and edit it (or set the CONFIG_YAML "
+            "repo variable for GitHub Actions)."
+        )
+    return config
 
 
 def _today_local(config: dict):

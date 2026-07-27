@@ -25,6 +25,20 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
 
+      - name: Materialise config.yaml from the CONFIG_YAML variable
+        env:
+          CONFIG_YAML: ${{ vars.CONFIG_YAML }}
+        run: |
+          # config.yaml is gitignored (personal). Write it from the repo
+          # variable at runtime; if unset, the app falls back to
+          # config.example.yaml and errors clearly on the placeholder email.
+          if [ -n "$CONFIG_YAML" ]; then
+            printf '%s' "$CONFIG_YAML" > config.yaml
+            echo "Wrote config.yaml from CONFIG_YAML variable."
+          else
+            echo "CONFIG_YAML variable not set — using config.example.yaml."
+          fi
+
       - name: Build and send digest
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

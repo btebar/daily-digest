@@ -6,9 +6,30 @@ import json
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from digest import main
 
 CONFIG = {"send_time": {"hour": 7, "timezone": "Europe/London"}}
+
+
+class TestLoadConfig:
+    def test_prefers_config_over_example(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("email:\n  to: real@me.com\n")
+        example = tmp_path / "config.example.yaml"
+        example.write_text(f"email:\n  to: {main.PLACEHOLDER_EMAIL}\n")
+        monkeypatch.setattr(main, "CONFIG_PATH", cfg)
+        monkeypatch.setattr(main, "EXAMPLE_CONFIG_PATH", example)
+        assert main.load_config()["email"]["to"] == "real@me.com"
+
+    def test_falls_back_to_example_and_rejects_placeholder(self, tmp_path, monkeypatch):
+        example = tmp_path / "config.example.yaml"
+        example.write_text(f"email:\n  to: {main.PLACEHOLDER_EMAIL}\n")
+        monkeypatch.setattr(main, "CONFIG_PATH", tmp_path / "config.yaml")  # missing
+        monkeypatch.setattr(main, "EXAMPLE_CONFIG_PATH", example)
+        with pytest.raises(RuntimeError, match="placeholder"):
+            main.load_config()
 
 
 def _at(hour: int) -> datetime:

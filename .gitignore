@@ -1,4 +1,6 @@
 .env
+# personal config; copy from config.example.yaml (see README)
+config.yaml
 digest.html
 __pycache__/
 *.pyc

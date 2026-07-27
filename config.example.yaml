@@ -1,0 +1,92 @@
+# ─────────────────────────────────────────────────────────────
+# Daily Digest — example configuration (TEMPLATE)
+#
+# Copy this file to config.yaml and edit it:
+#     cp config.example.yaml config.yaml
+# config.yaml is gitignored, so your personal topics/email never get committed.
+#
+# For GitHub Actions, paste your finished config.yaml into a repo *variable*
+# named CONFIG_YAML (Settings → Secrets and variables → Actions → Variables).
+# The workflow writes it back to config.yaml at runtime. See the README.
+# ─────────────────────────────────────────────────────────────
+
+email:
+  to: you@example.com      # ← where the digest is delivered. CHANGE THIS.
+  # The "from" address MUST be on a domain you've verified in Resend
+  # (or use onboarding@resend.dev for testing — it can only send to your own
+  # Resend account email). See README for setup.
+  from: "onboarding@resend.dev"
+  subject_prefix: "🧠 Daily Digest"
+
+send_time:
+  hour: 7                 # 7 AM...
+  timezone: Europe/London # ...in this timezone (DST-safe; see main.py)
+
+curation:
+  model: gemini-flash-latest  # alias that tracks the current stable Flash;
+                              # use gemini-pro-latest for sharper curation.
+                              # Run `python -m digest.list_models` to see exactly
+                              # which model names your API key supports.
+  max_items: 12           # max items in the email
+  lookback_hours: 72      # only consider items published in this window.
+                          # 72h bridges the arXiv weekend gap (arXiv only
+                          # announces Sun–Thu). Already-sent items are cached in
+                          # state/seen_urls.json and skipped, so the wider
+                          # window doesn't cause day-to-day repeats.
+  # Guidance handed to the model about what "notable" means for YOU.
+  notability: >
+    Prioritise genuinely novel results, strong empirical work, influential
+    threads, and launches that someone working on these topics would want to
+    know about today. Deprioritise incremental papers, marketing, and rehashes
+    — but still surface the best of what's available: aim to fill the digest
+    with the strongest items relative to my interests, even on a quiet day.
+    Only return an empty digest if there are genuinely no relevant items.
+
+# Your interests, in your own words. The model reads these verbatim.
+# Replace these examples with whatever you want to follow.
+topics:
+  - Large language models and agents (tool use, multi-agent, long-horizon autonomy)
+  - LLM evaluation and benchmarks, and benchmark saturation
+  - Reinforcement learning, reward design, and reward hacking
+  - Open-source model releases and practical LLM tooling
+  - AI safety, alignment, calibration, and honesty
+
+sources:
+  # Research papers — pulled from the arXiv API by category.
+  arxiv:
+    categories:
+      - cs.AI   # Artificial Intelligence
+      - cs.CL   # Computation & Language (NLP / LLMs)
+      - cs.LG   # Machine Learning
+      - cs.MA   # Multi-Agent Systems
+    max_results: 90   # newest N papers across the categories above
+
+  # News, articles, blogs, newsletters, and release feeds (RSS/Atom).
+  # Add or remove freely — anything with a feed URL works.
+  rss:
+    - name: Google DeepMind Blog
+      url: https://deepmind.google/blog/rss.xml
+    - name: OpenAI News
+      url: https://openai.com/news/rss.xml
+    - name: Hugging Face Blog
+      url: https://huggingface.co/blog/feed.xml
+    - name: Simon Willison (LLMs)
+      url: https://simonwillison.net/atom/everything/
+    - name: MIT Technology Review — AI
+      url: https://www.technologyreview.com/topic/artificial-intelligence/feed
+    - name: Import AI (Jack Clark)
+      url: https://importai.substack.com/feed
+    # Example GitHub releases feed (uncomment / edit for repos you follow):
+    # - name: vLLM releases
+    #   url: https://github.com/vllm-project/vllm/releases.atom
+
+  # Reddit — top posts of the day from each subreddit, via the official API.
+  # Requires REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET (see README). If those
+  # aren't set, Reddit is simply skipped. Remove any subs you don't want.
+  reddit:
+    top_period: day   # hour | day | week
+    per_sub: 12
+    subreddits:
+      - MachineLearning
+      - LocalLLaMA
+      - artificial

@@ -41,14 +41,19 @@ Everything is driven by **`config.yaml`** — topics, sources, model, send time.
 ```bash
 git clone https://github.com/<you>/daily-digest.git
 cd daily-digest
+cp config.example.yaml config.yaml   # your personal config (gitignored)
 ```
 
 Open **`config.yaml`** and set at least:
 
-- `email.to` — where the digest is delivered (defaults to the original author's
-  address, so **change this**).
+- `email.to` — where the digest is delivered (**required** — the app refuses to
+  send while this is the `you@example.com` placeholder).
 - `email.from` — your verified Resend sender, or `onboarding@resend.dev` to start.
 - `topics` — your interests, in plain words.
+
+`config.yaml` is **gitignored**, so your topics and email never get committed —
+which means the repo is safe to make public, and a clone only ever ships the
+neutral `config.example.yaml`.
 
 Then push it to **your own** GitHub repo:
 
@@ -56,14 +61,24 @@ Then push it to **your own** GitHub repo:
 gh repo create daily-digest --private --source=. --push
 ```
 
-### 3. Add the keys as repo secrets
+### 3. Add your keys and config to the repo
 
-Repo → **Settings → Secrets and variables → Actions → New repository secret**:
+Repo → **Settings → Secrets and variables → Actions**.
+
+Under **Secrets** → *New repository secret*:
 
 - `GEMINI_API_KEY`
 - `RESEND_API_KEY`
 - `REDDIT_CLIENT_ID` *(optional — enables Reddit; see below)*
 - `REDDIT_CLIENT_SECRET` *(optional)*
+
+Under **Variables** → *New repository variable*:
+
+- `CONFIG_YAML` — paste the **entire contents of your `config.yaml`**. Because
+  `config.yaml` isn't committed, the workflow writes this variable back to
+  `config.yaml` at runtime. (A *variable*, not a secret: config isn't sensitive,
+  and secrets get masked in logs, which would garble matching text.) Update this
+  variable whenever you change your topics or sources.
 
 That's it — the workflow runs itself every morning at **7 AM UK time**.
 
@@ -87,6 +102,7 @@ entirely and Reddit is just left out.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp config.example.yaml config.yaml   # then edit email.to + topics
 
 # Preview without sending — writes digest.html and prints a text version.
 export GEMINI_API_KEY=...
