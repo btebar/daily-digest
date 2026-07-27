@@ -28,7 +28,7 @@ def _featured_block(featured: list[dict]) -> str:
               <div style="font-size:12px;color:#6b7280;margin:3px 0 8px;">
                  {_esc(it.source)}</div>
               <div style="font-size:14.5px;color:#374151;line-height:1.6;">
-                 {_esc(sel['summary'])}</div>
+                 {_esc(sel["summary"])}</div>
             </div>"""
         )
     return (
@@ -40,7 +40,7 @@ def _featured_block(featured: list[dict]) -> str:
 def _more_block(more: list[dict]) -> str:
     if not more:
         return ""
-    groups: "OrderedDict[str, list[dict]]" = OrderedDict()
+    groups: OrderedDict[str, list[dict]] = OrderedDict()
     for sel in more:
         groups.setdefault(sel["category"], []).append(sel)
 
@@ -58,14 +58,14 @@ def _more_block(more: list[dict]) -> str:
                   <div style="font-size:12px;color:#6b7280;margin:2px 0 4px;">
                      {_esc(it.source)}</div>
                   <div style="font-size:13.5px;color:#374151;line-height:1.5;">
-                     {_esc(sel['one_liner'])}</div>
+                     {_esc(sel["one_liner"])}</div>
                 </div>"""
             )
         sections.append(
             f"""
             <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.05em;
                        color:#9333ea;border-bottom:1px solid #eee;padding-bottom:5px;
-                       margin:24px 0 14px;">{_esc(category)}</h3>{''.join(rows)}"""
+                       margin:24px 0 14px;">{_esc(category)}</h3>{"".join(rows)}"""
         )
     return (
         '<h2 style="font-size:14px;text-transform:uppercase;letter-spacing:.05em;'
@@ -78,15 +78,14 @@ def render_html(featured: list[dict], more: list[dict], date: datetime) -> str:
     body = _featured_block(featured) + _more_block(more)
     if total == 0:
         body = (
-            '<p style="color:#6b7280;">Nothing notable enough to surface today. '
-            "Quiet is good.</p>"
+            '<p style="color:#6b7280;">Nothing notable enough to surface today. Quiet is good.</p>'
         )
     return f"""\
 <div style="max-width:640px;margin:0 auto;padding:24px 20px;
             font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
   <div style="font-size:22px;font-weight:700;color:#111;">Your Daily Digest</div>
   <div style="font-size:13px;color:#6b7280;margin:2px 0 8px;">
-    {date.strftime('%A, %d %B %Y')} · {total} items</div>
+    {date.strftime("%A, %d %B %Y")} · {total} items</div>
   {body}
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;
               font-size:12px;color:#9ca3af;">
@@ -101,14 +100,17 @@ def render_text(featured: list[dict], more: list[dict], date: datetime) -> str:
         lines += ["TOP PICKS, EXPLAINED", ""]
     for i, sel in enumerate(featured, 1):
         it = sel["item"]
-        lines += [f"#{i} {it.title}", f"  {sel['summary']}",
-                  f"  {it.source} — {it.url}", ""]
+        lines += [f"#{i} {it.title}", f"  {sel['summary']}", f"  {it.source} — {it.url}", ""]
     if more:
         lines += ["ALSO WORTH A LOOK", ""]
     for sel in more:
         it = sel["item"]
-        lines += [f"[{sel['category']}] {it.title}", f"  {sel['one_liner']}",
-                  f"  {it.source} — {it.url}", ""]
+        lines += [
+            f"[{sel['category']}] {it.title}",
+            f"  {sel['one_liner']}",
+            f"  {it.source} — {it.url}",
+            "",
+        ]
     if not featured and not more:
         lines.append("Nothing notable enough to surface today.")
     return "\n".join(lines)

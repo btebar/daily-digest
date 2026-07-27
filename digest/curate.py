@@ -11,6 +11,7 @@ hallucinate links — we map indices back to the real Items ourselves.
 from __future__ import annotations
 
 import json
+import logging
 import os
 
 from google import genai
@@ -18,6 +19,8 @@ from google.genai import types
 from pydantic import BaseModel
 
 from .collect import Item
+
+log = logging.getLogger(__name__)
 
 
 # Structured-output schema (Gemini validates against these Pydantic models).
@@ -105,7 +108,14 @@ def curate(items: list[Item], config: dict) -> dict:
             response_schema=_Curation,
         ),
     )
-    data = json.loads(resp.text)
+    # A blocked or empty response yields resp.text == None; don't let json.loads
+    # throw an opaque "expected value" error — fail with a clear message instead.
+    if not resp.text:
+        raise RuntimeError("Gemini returned an empty response (blocked or truncated)")
+    try:
+        data = json.loads(resp.text)
+    except ValueError as exc:
+        raise RuntimeError(f"Gemini returned invalid JSON: {exc}") from exc
 
     featured: list[dict] = []
     used: set[int] = set()
