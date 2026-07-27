@@ -1,9 +1,9 @@
 # Daily Digest
 
 A daily email of the most notable papers, articles, and releases on **your**
-topics. It collects from arXiv + RSS feeds, has Claude curate and summarise the
-best of it, and emails you a digest every morning — all on free infrastructure
-(GitHub Actions + Resend).
+topics. It collects from arXiv + RSS feeds (and optionally Reddit), has Gemini
+curate and summarise the best of it, and emails you a digest every morning — all
+on free infrastructure (GitHub Actions + Resend).
 
 Each morning you get:
 
@@ -17,7 +17,7 @@ Each morning you get:
 GitHub Actions (daily cron)
    └─ python -m digest.main
         ├─ collect.py  → pull recent items from arXiv API + RSS feeds
-        ├─ curate.py   → Claude picks + summarises the notable ones
+        ├─ curate.py   → Gemini picks + summarises the notable ones
         ├─ render.py   → build the HTML email
         └─ send.py     → deliver via Resend → your inbox
 ```
@@ -36,22 +36,49 @@ Everything is driven by **`config.yaml`** — topics, sources, model, send time.
   - No domain yet? Set `email.from: "onboarding@resend.dev"`. That test sender
     can only deliver to the email you signed up to Resend with — fine to start.
 
-### 2. Push this repo to GitHub
+### 2. Clone and make it yours
 
 ```bash
+git clone https://github.com/<you>/daily-digest.git
 cd daily-digest
-git init && git add . && git commit -m "Daily digest"
+cp config.example.yaml config.yaml   # your personal config (gitignored)
+```
+
+Open **`config.yaml`** and set at least:
+
+- `email.to` — where the digest is delivered (**required** — the app refuses to
+  send while this is the `you@example.com` placeholder).
+- `email.from` — your verified Resend sender, or `onboarding@resend.dev` to start.
+- `topics` — your interests, in plain words.
+
+`config.yaml` is **gitignored**, so your topics and email never get committed —
+which means the repo is safe to make public, and a clone only ever ships the
+neutral `config.example.yaml`.
+
+Then push it to **your own** GitHub repo:
+
+```bash
 gh repo create daily-digest --private --source=. --push
 ```
 
-### 3. Add the keys as repo secrets
+### 3. Add your keys and config to the repo
 
-Repo → **Settings → Secrets and variables → Actions → New repository secret**:
+Repo → **Settings → Secrets and variables → Actions**.
+
+Under **Secrets** → *New repository secret*:
 
 - `GEMINI_API_KEY`
 - `RESEND_API_KEY`
 - `REDDIT_CLIENT_ID` *(optional — enables Reddit; see below)*
 - `REDDIT_CLIENT_SECRET` *(optional)*
+
+Under **Variables** → *New repository variable*:
+
+- `CONFIG_YAML` — paste the **entire contents of your `config.yaml`**. Because
+  `config.yaml` isn't committed, the workflow writes this variable back to
+  `config.yaml` at runtime. (A *variable*, not a secret: config isn't sensitive,
+  and secrets get masked in logs, which would garble matching text.) Update this
+  variable whenever you change your topics or sources.
 
 That's it — the workflow runs itself every morning at **7 AM UK time**.
 
@@ -75,6 +102,7 @@ entirely and Reddit is just left out.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp config.example.yaml config.yaml   # then edit email.to + topics
 
 # Preview without sending — writes digest.html and prints a text version.
 export GEMINI_API_KEY=...
@@ -90,6 +118,25 @@ python -m digest.main --force
 ```
 
 Or trigger the real workflow from GitHub: **Actions → Daily Digest → Run workflow**.
+
+## Development
+
+Install the dev tooling and run the checks (ruff, mypy, pytest) — the same ones
+CI runs on every push (`.github/workflows/ci.yml`):
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+ruff check .          # lint
+ruff format --check . # formatting
+mypy digest           # type check
+pytest -q             # tests
+```
+
+Runtime dependency versions are pinned in `requirements.txt` (the lock CI
+installs from); the abstract ranges live in `pyproject.toml`. After upgrading a
+dependency, refresh the lock with `pip freeze > requirements.txt`.
 
 ## Customising
 
@@ -107,10 +154,12 @@ Everything lives in `config.yaml`:
 ### Send time & DST
 
 GitHub Actions cron only runs in UTC and doesn't shift for BST/GMT. The workflow
-fires at both 06:00 and 07:00 UTC; `main.should_run_now()` checks the real local
-time in your configured timezone and only proceeds at the target hour. To change
-the time, edit `send_time.hour` in `config.yaml` **and** the two `cron:` lines in
-`.github/workflows/digest.yml` to bracket it.
+fires several times through the morning; `main.send_gate()` checks the real local
+time in your configured timezone and sends on the first fire at/after the target
+hour that hasn't already sent today (a per-day marker is committed back to the
+repo so later fires no-op). To change the time, edit `send_time.hour` in
+`config.yaml` **and** the `cron:` lines in `.github/workflows/digest.yml` to
+bracket it.
 
 ## Cost
 

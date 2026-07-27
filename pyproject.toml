@@ -1,0 +1,49 @@
+[project]
+name = "daily-digest"
+version = "0.1.0"
+description = "A personalised daily digest: collect from arXiv/RSS/Reddit, curate with Gemini, email via Resend."
+requires-python = ">=3.12"
+dependencies = [
+    "google-genai>=2.14,<3",
+    "feedparser>=6.0,<7",
+    "requests>=2.32,<3",
+    "resend>=2.0,<3",
+    "PyYAML>=6.0,<7",
+    "pydantic>=2.0,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-requests",
+    "types-PyYAML",
+]
+
+[project.scripts]
+daily-digest = "digest.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["digest"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true
+files = ["digest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

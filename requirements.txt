@@ -1,5 +1,9 @@
-google-genai>=1.0
-feedparser>=6.0
-requests>=2.31
-resend>=2.0
-PyYAML>=6.0
+# Pinned runtime dependencies for reproducible CI runs.
+# Abstract version ranges live in pyproject.toml; this file is the lock.
+# Regenerate after upgrading with:  pip freeze > requirements.txt
+google-genai==2.14.0
+feedparser==6.0.12
+requests==2.34.2
+resend==2.34.0
+PyYAML==6.0.3
+pydantic==2.13.4

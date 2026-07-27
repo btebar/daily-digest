@@ -23,7 +23,8 @@ def main() -> int:
         actions = getattr(m, "supported_actions", None) or []
         if "generateContent" in actions or not actions:
             # m.name is like "models/gemini-2.5-flash"; the config wants the tail.
-            print(m.name.split("/")[-1])
+            name = m.name or ""
+            print(name.split("/")[-1])
     return 0
 
 
