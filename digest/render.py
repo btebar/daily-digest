@@ -78,12 +78,13 @@ def render_html(featured: list[dict], more: list[dict], date: datetime) -> str:
     body = _featured_block(featured) + _more_block(more)
     if total == 0:
         body = (
-            '<p style="color:#6b7280;">Nothing notable enough to surface today. Quiet is good.</p>'
+            '<p style="color:#6b7280;">Nothing notable enough to surface this week. '
+            "Quiet is good.</p>"
         )
     return f"""\
 <div style="max-width:640px;margin:0 auto;padding:24px 20px;
             font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
-  <div style="font-size:22px;font-weight:700;color:#111;">Your Daily Digest</div>
+  <div style="font-size:22px;font-weight:700;color:#111;">Your Weekly Digest</div>
   <div style="font-size:13px;color:#6b7280;margin:2px 0 8px;">
     {date.strftime("%A, %d %B %Y")} · {total} items</div>
   {body}
@@ -95,7 +96,7 @@ def render_html(featured: list[dict], more: list[dict], date: datetime) -> str:
 
 
 def render_text(featured: list[dict], more: list[dict], date: datetime) -> str:
-    lines = [f"Your Daily Digest — {date.strftime('%A, %d %B %Y')}", ""]
+    lines = [f"Your Weekly Digest — {date.strftime('%A, %d %B %Y')}", ""]
     if featured:
         lines += ["TOP PICKS, EXPLAINED", ""]
     for i, sel in enumerate(featured, 1):
@@ -112,5 +113,5 @@ def render_text(featured: list[dict], more: list[dict], date: datetime) -> str:
             "",
         ]
     if not featured and not more:
-        lines.append("Nothing notable enough to surface today.")
+        lines.append("Nothing notable enough to surface this week.")
     return "\n".join(lines)

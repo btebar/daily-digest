@@ -1,11 +1,11 @@
-# Daily Digest
+# Weekly Digest
 
-A daily email of the most notable papers, articles, and releases on **your**
+A weekly email of the most notable papers, articles, and releases on **your**
 topics. It collects from arXiv + RSS feeds (and optionally Reddit), has Gemini
-curate and summarise the best of it, and emails you a digest every morning — all
-on free infrastructure (GitHub Actions + Resend).
+curate and summarise the best of it, and emails you a digest every Monday
+morning — all on free infrastructure (GitHub Actions + Resend).
 
-Each morning you get:
+Each Monday you get:
 
 - **Top picks, explained** — the ~5 most important items, each with a clear
   teaching paragraph you can actually learn from.
@@ -14,7 +14,7 @@ Each morning you get:
 ## How it works
 
 ```
-GitHub Actions (daily cron)
+GitHub Actions (weekly cron — Monday)
    └─ python -m digest.main
         ├─ collect.py  → pull recent items from arXiv API + RSS feeds
         ├─ curate.py   → Gemini picks + summarises the notable ones
@@ -29,7 +29,7 @@ Everything is driven by **`config.yaml`** — topics, sources, model, send time.
 ### 1. Get the two API keys
 
 - **Gemini** (curation): https://aistudio.google.com/apikey → create an API
-  key (free tier is generous and covers daily use).
+  key (the free tier comfortably covers one call a week).
 - **Resend** (email): https://resend.com → sign up → API Keys → create one.
   - To send *from your own domain*, add + verify it under Resend → Domains,
     then set `email.from` in `config.yaml` to e.g. `digest@yourdomain.com`.
@@ -80,7 +80,12 @@ Under **Variables** → *New repository variable*:
   and secrets get masked in logs, which would garble matching text.) Update this
   variable whenever you change your topics or sources.
 
-That's it — the workflow runs itself every morning at **7 AM UK time**.
+That's it — the workflow runs itself every **Monday at 7 AM UK time**.
+
+To change the day, edit the `cron:` lines in `.github/workflows/digest.yml`
+(`* * 1` is Monday, `* * 5` is Friday, and so on) and move the Tuesday
+catch-up line to the day after. To go back to daily, set
+`send_time.min_interval_days: 0` and use `* * *`.
 
 ### Optional: enable Reddit (official API)
 
@@ -117,7 +122,9 @@ export RESEND_API_KEY=re_...
 python -m digest.main --force
 ```
 
-Or trigger the real workflow from GitHub: **Actions → Daily Digest → Run workflow**.
+Or trigger the real workflow from GitHub: **Actions → Weekly Digest → Run
+workflow**. A manual run uses `--force`, so it sends immediately and does *not*
+consume the weekly slot.
 
 ## Development
 
@@ -149,29 +156,74 @@ Everything lives in `config.yaml`:
 | `sources.rss` | Any RSS/Atom feed — news, blogs, newsletters, GitHub releases (`…/releases.atom`). |
 | `curation.model` | `gemini-flash-latest` (default) or `gemini-pro-latest` for sharper picks. Run `python -m digest.list_models` to see valid names. |
 | `curation.max_items` / `lookback_hours` | Digest length and freshness window. |
-| `send_time` | Hour + timezone. Delivery is DST-safe (see below). |
+| `curation.fallback_model` | Second model tried if the first is overloaded (see below). |
+| `send_time` | Hour, timezone, and `min_interval_days`. Delivery is DST-safe (see below). |
 
-### Send time & DST
+### Schedule & DST
 
-GitHub Actions cron only runs in UTC and doesn't shift for BST/GMT. The workflow
-fires several times through the morning; `main.send_gate()` checks the real local
-time in your configured timezone and sends on the first fire at/after the target
-hour that hasn't already sent today (a per-day marker in `state/`) so later fires
-no-op. To change the time, edit `send_time.hour` in `config.yaml` **and** the
-`cron:` lines in `.github/workflows/digest.yml` to bracket it.
+GitHub Actions cron only runs in UTC and doesn't shift for BST/GMT, and it
+drops or delays scheduled runs under load. So the workflow fires **three times
+on Monday morning** (06:00, 07:00, 08:00 UTC) plus a **Tuesday catch-up**.
+`main.send_gate()` checks the real local time in your timezone and sends on the
+first fire that is both at/after `send_time.hour` and at least
+`send_time.min_interval_days` since the last send; every later fire no-ops.
+
+That means the *cadence* comes from two places working together:
+
+- the **cron day** in `.github/workflows/digest.yml` decides which morning,
+- **`min_interval_days: 6`** guarantees you never get two digests in a week,
+  even if GitHub fires something unexpected.
+
+The interval is 6 rather than 7 so that if *every* Monday slot gets dropped,
+Tuesday's run still rescues that week's digest. Normally Tuesday just no-ops.
+
+### If a run fails
+
+Curation is a single Gemini call, and Gemini returns `503 UNAVAILABLE` ("model
+is currently experiencing high demand") fairly often at busy times. `curate.py`
+retries a transient error (429/5xx) three times with a growing backoff
+(20s → 60s → 150s), then falls back to `curation.fallback_model` if one is
+configured — overload is per-model, so a different one usually gets through.
+Permanent errors (e.g. a bad request) fail fast rather than sitting through the
+backoff.
+
+If the run still fails, you get **one** alert email — a marker in
+`state/last_alert` stops the later fires of the same morning from each sending
+their own copy. Those later fires do still retry the digest itself.
+
+### arXiv coverage
+
+`sources.arxiv.max_results` fetches the **newest N** papers in your categories,
+not "everything since the cutoff". 2000 (the arXiv API's per-request maximum)
+reached back about **6 days** at the volume these categories ran at in Aug 2026,
+which covers most of a week. arXiv volume grows over time, so this window
+shrinks — if you start noticing the early part of the week going missing, that's
+why, and covering a full week would need paginated fetching plus a cheap
+pre-filter before the curation call.
+
+Note also that arXiv only announces Sun–Thu, so a Monday digest naturally covers
+the previous Sun–Thu papers plus whatever the RSS feeds published over the
+weekend.
 
 ### Run state
 
-`state/` holds the once-per-day send marker and the `seen_urls.json` dedup cache.
-It's **not committed** — the workflow persists it between runs via the
+`state/` holds the send marker, the failure-alert marker, and the
+`seen_urls.json` dedup cache. It's **not committed** — the workflow persists it
+between runs via the
 [Actions cache](https://docs.github.com/actions/using-workflows/caching-dependencies-to-speed-up-workflows).
 This keeps `main` free of `chore:` commits and avoids push races between the
-morning's cron fires. If the cache is ever evicted (GitHub drops caches unused
-for ~7 days), the digest simply starts its dedup memory fresh — at worst you see
-a few recently-sent items again. Locally, `state/` is created on first run.
+morning's cron fires.
+
+GitHub evicts caches unused for ~7 days, which a weekly schedule sits right on
+the edge of — the Tuesday catch-up run helps by touching the cache a second time
+each week. If it's evicted anyway, nothing breaks: the send marker's absence just
+means the next Monday sends normally, and the dedup memory starts fresh (at worst
+you see a few recently-sent items again). Locally, `state/` is created on first
+run.
 
 ## Cost
 
-Curation is one Gemini call per day over ~100 candidates. Gemini's free tier
-comfortably covers a daily Flash call, and GitHub Actions + Resend free tiers
-cover the rest — so this typically runs at no cost.
+Curation is one Gemini call per week over ~2000 candidates — roughly 300k input
+tokens, about **$0.09 a week** at Flash pricing, and often $0 since it may fit
+inside Gemini's free tier. GitHub Actions + Resend free tiers cover the rest.
+To cut it further, lower `sources.arxiv.max_results`.

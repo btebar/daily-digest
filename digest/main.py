@@ -6,7 +6,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -23,8 +23,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config.yaml"
 EXAMPLE_CONFIG_PATH = REPO_ROOT / "config.example.yaml"
 STATE_PATH = REPO_ROOT / "state" / "last_sent"
+ALERT_PATH = REPO_ROOT / "state" / "last_alert"
 SEEN_PATH = REPO_ROOT / "state" / "seen_urls.json"
 SEEN_RETENTION_DAYS = 21  # how long a sent item stays suppressed from repeats
+DEFAULT_MIN_INTERVAL_DAYS = 6  # weekly, with a day of slack for cron jitter
 PLACEHOLDER_EMAIL = "you@example.com"  # must be changed before a real send
 
 
@@ -72,6 +74,22 @@ def _record_sent(day: str) -> None:
     STATE_PATH.write_text(day + "\n")
 
 
+def _already_alerted_today(today: str) -> bool:
+    """True if a failure alert has already gone out for `today`.
+
+    The workflow fires several times each digest morning. Without this, one bad
+    morning (e.g. the model returning 503) sends an alert email per fire."""
+    try:
+        return ALERT_PATH.read_text().strip() == today
+    except FileNotFoundError:
+        return False
+
+
+def _record_alerted(today: str) -> None:
+    ALERT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ALERT_PATH.write_text(today + "\n")
+
+
 def _load_seen() -> dict[str, str]:
     """Return {url_key: iso_date} of recently-sent items, pruned to retention.
 
@@ -98,18 +116,31 @@ def send_gate(config: dict, now: datetime | None = None) -> tuple[bool, str]:
     """Decide whether to send now. Returns (send?, reason).
 
     Robust to GitHub cron jitter/drops: the workflow fires several times through
-    the morning; we send on the FIRST fire at/after the target local hour that
-    hasn't already sent today, and record a per-day marker so later fires no-op.
-    DST-safe because we compare against local (Europe/London) date & hour.
+    the digest morning; we send on the FIRST fire at/after the target local hour
+    that is at least `min_interval_days` since the last send, and record a marker
+    so later fires no-op. DST-safe because we compare against local time.
+
+    The interval (rather than a bare "already sent today" check) is what makes
+    the cadence weekly: the Tuesday safety-net cron only sends if Monday's slots
+    were all dropped, and a stray extra cron can never produce a second digest
+    inside the same week.
 
     `now` is injectable for testing; it defaults to the current local time."""
     st = config["send_time"]
     now_local = now or datetime.now(ZoneInfo(st["timezone"]))
-    today = now_local.date().isoformat()
+    today = now_local.date()
     if now_local.hour < st["hour"]:
         return False, f"before {st['hour']}:00 {st['timezone']}"
-    if _last_sent() == today:
-        return False, f"already sent today ({today})"
+
+    interval = st.get("min_interval_days", DEFAULT_MIN_INTERVAL_DAYS)
+    last = _last_sent()
+    if last:
+        try:
+            days = (today - date.fromisoformat(last)).days
+        except ValueError:
+            days = interval  # unreadable marker: don't block the send
+        if days < interval:
+            return False, f"last sent {last} ({days}d ago, interval is {interval}d)"
     return True, "ok"
 
 
@@ -151,14 +182,14 @@ def run(config: dict, args: argparse.Namespace) -> int:
     send_email(config, subject, html, text)
     # Remember what we actually sent so it isn't repeated in later digests.
     _record_seen([sel["item"].dedup_key() for sel in featured + more])
-    if not args.force:  # only the scheduled run records the once-per-day marker
+    if not args.force:  # only the scheduled run records the once-per-week marker
         _record_sent(_today_local(config).isoformat())
     log.info("Done.")
     return 0
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Build and send the daily digest.")
+    ap = argparse.ArgumentParser(description="Build and send the weekly digest.")
     ap.add_argument("--force", action="store_true", help="ignore the send-time gate")
     ap.add_argument("--dry-run", action="store_true", help="write digest.html locally, do not send")
     args = ap.parse_args()
@@ -175,7 +206,14 @@ def main() -> int:
         if not args.dry_run:
             import traceback
 
-            send_failure_alert(config, traceback.format_exc())
+            # At most one alert email per day — the later fires of the same
+            # morning still retry the send, they just don't re-alert.
+            today = _today_local(config).isoformat()
+            if _already_alerted_today(today):
+                log.info("Failure alert already sent today (%s) — not re-alerting.", today)
+            else:
+                send_failure_alert(config, traceback.format_exc())
+                _record_alerted(today)
         return 1
 
 

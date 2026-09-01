@@ -1,7 +1,7 @@
 [project]
 name = "daily-digest"
 version = "0.1.0"
-description = "A personalised daily digest: collect from arXiv/RSS/Reddit, curate with Gemini, email via Resend."
+description = "A personalised weekly digest: collect from arXiv/RSS/Reddit, curate with Gemini, email via Resend."
 requires-python = ">=3.12"
 dependencies = [
     "google-genai>=2.14,<3",

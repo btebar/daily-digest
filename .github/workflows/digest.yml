@@ -1,16 +1,19 @@
-name: Daily Digest
+name: Weekly Digest
 
 on:
   schedule:
-    # GitHub cron is UTC and does NOT observe DST, and top-of-hour runs are
-    # often delayed or dropped under load. So we fire several times through the
-    # morning; the script sends on the FIRST fire at/after 7 AM London that
-    # hasn't already sent today (a per-day marker in state/, persisted via the
-    # Actions cache below) and later fires no-op. DST-safe; self-heals if a
-    # slot is dropped.
-    - cron: "0 6 * * *"   # 07:00 BST / 06:00 GMT
-    - cron: "0 7 * * *"   # 08:00 BST / 07:00 GMT
-    - cron: "0 8 * * *"   # 09:00 BST / 08:00 GMT (catch-up)
+    # Monday mornings. GitHub cron is UTC and does NOT observe DST, and
+    # top-of-hour runs are often delayed or dropped under load. So we fire
+    # several times through the morning; the script sends on the FIRST fire
+    # at/after 7 AM London that is at least `min_interval_days` since the last
+    # send (marker in state/, persisted via the Actions cache below) and later
+    # fires no-op. DST-safe; self-heals if a slot is dropped.
+    - cron: "0 6 * * 1"   # Mon 07:00 BST / 06:00 GMT
+    - cron: "0 7 * * 1"   # Mon 08:00 BST / 07:00 GMT
+    - cron: "0 8 * * 1"   # Mon 09:00 BST / 08:00 GMT (catch-up)
+    # Tuesday safety net: no-ops if Monday already sent. Only fires a digest
+    # if every Monday slot above was dropped by GitHub.
+    - cron: "0 8 * * 2"   # Tue 09:00 BST / 08:00 GMT
   workflow_dispatch: {}   # manual "Run workflow" sends immediately
 
 # No write access needed: state is kept in the Actions cache, not committed.
@@ -27,12 +30,12 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
 
-      # Persist state/ (last_sent + seen_urls.json) between runs without
-      # committing to git. A unique key per run always saves a fresh cache;
-      # restore-keys pulls the most recent previous one. Losing it (eviction
-      # after ~7 idle days) at worst causes a few repeated items — harmless.
+      # Persist state/ (last_sent + last_alert + seen_urls.json) between runs
+      # without committing to git. A unique key per run always saves a fresh
+      # cache; restore-keys pulls the most recent previous one. Losing it
+      # (eviction after ~7 idle days) at worst causes a few repeated items.
       - name: Restore digest state
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: state
           key: digest-state-${{ github.run_id }}
@@ -61,10 +64,22 @@ jobs:
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
         # Manual "Run workflow" sends immediately (--force, no marker);
-        # scheduled runs use the once-per-day send gate.
+        # scheduled runs use the once-per-week send gate.
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             python -m digest.main --force
           else
             python -m digest.main
           fi
+
+      # Save explicitly with if: always(). The combined actions/cache action
+      # declares post-if: success(), so a FAILED run never saves — which meant
+      # the last_alert marker could not persist and every fire of a bad morning
+      # re-sent the failure alert. Saving on failure too also keeps seen_urls
+      # from going stale while the run is broken.
+      - name: Save digest state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: digest-state-${{ github.run_id }}
