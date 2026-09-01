@@ -45,8 +45,8 @@ def send_failure_alert(config: dict, error: str) -> None:
             {
                 "from": email["from"],
                 "to": [email["to"]],
-                "subject": f"{email.get('subject_prefix', 'Daily Digest')} — FAILED",
-                "text": f"The daily digest run failed:\n\n{error}",
+                "subject": f"{email.get('subject_prefix', 'Weekly Digest')} — FAILED",
+                "text": f"The weekly digest run failed:\n\n{error}",
             }
         )
         log.info("Sent failure alert via Resend")

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# Daily Digest — example configuration (TEMPLATE)
+# Weekly Digest — example configuration (TEMPLATE)
 #
 # Copy this file to config.yaml and edit it:
 #     cp config.example.yaml config.yaml
@@ -16,30 +16,48 @@ email:
   # (or use onboarding@resend.dev for testing — it can only send to your own
   # Resend account email). See README for setup.
   from: "onboarding@resend.dev"
-  subject_prefix: "🧠 Daily Digest"
+  subject_prefix: "🧠 Weekly Digest"
 
 send_time:
   hour: 7                 # 7 AM...
   timezone: Europe/London # ...in this timezone (DST-safe; see main.py)
+  min_interval_days: 6    # don't send again within this many days of the last
+                          # send. This is what enforces the weekly cadence —
+                          # the day itself comes from the cron in
+                          # .github/workflows/digest.yml (default: Monday).
+                          # 6 rather than 7 so the Tuesday catch-up cron can
+                          # still rescue a Monday that GitHub dropped.
+                          # For a daily digest, set this to 0.
 
 curation:
-  model: gemini-flash-latest  # alias that tracks the current stable Flash;
-                              # use gemini-pro-latest for sharper curation.
-                              # Run `python -m digest.list_models` to see exactly
-                              # which model names your API key supports.
+  model: gemini-3.6-flash # a PINNED Flash model. Deliberately not the
+                          # gemini-flash-latest alias: that alias tracks the
+                          # newest Flash, which is heavily loaded and returned
+                          # 503 ("high demand") on essentially every run from
+                          # mid-August 2026. Pinning a model one step back is
+                          # what actually keeps the digest sending.
+                          # Use gemini-pro-latest for sharper curation.
+                          # Run `python -m digest.list_models` to see exactly
+                          # which model names your API key supports.
+  fallback_model: gemini-pro-latest
+                          # tried if the primary is still returning 503
+                          # ("high demand") after the retries in curate.py.
+                          # Overload is per-model, so a second one usually
+                          # gets through. Set to null to disable.
   max_items: 12           # max items in the email
-  lookback_hours: 72      # only consider items published in this window.
-                          # 72h bridges the arXiv weekend gap (arXiv only
-                          # announces Sun–Thu). Already-sent items are cached in
-                          # state/seen_urls.json and skipped, so the wider
-                          # window doesn't cause day-to-day repeats.
+  lookback_hours: 176     # only consider items published in this window.
+                          # A week (168h) plus 8h of slack so a digest that
+                          # fires late — or on the Tuesday catch-up — doesn't
+                          # leave a gap at the start of the week. Already-sent
+                          # items are cached in state/seen_urls.json and
+                          # skipped, so the overlap doesn't cause repeats.
   # Guidance handed to the model about what "notable" means for YOU.
   notability: >
     Prioritise genuinely novel results, strong empirical work, influential
     threads, and launches that someone working on these topics would want to
-    know about today. Deprioritise incremental papers, marketing, and rehashes
-    — but still surface the best of what's available: aim to fill the digest
-    with the strongest items relative to my interests, even on a quiet day.
+    know about from the past week. Deprioritise incremental papers, marketing,
+    and rehashes. This is a weekly roundup, so the bar is higher than a daily
+    one: pick the genuine highlights of the week rather than filling space.
     Only return an empty digest if there are genuinely no relevant items.
 
 # Your interests, in your own words. The model reads these verbatim.
@@ -59,7 +77,12 @@ sources:
       - cs.CL   # Computation & Language (NLP / LLMs)
       - cs.LG   # Machine Learning
       - cs.MA   # Multi-Agent Systems
-    max_results: 90   # newest N papers across the categories above
+    max_results: 2000 # newest N papers across the categories above (2000 is
+                      # the arXiv API's per-request maximum). This is "newest
+                      # N", not "everything since the cutoff" — busy categories
+                      # can publish more than this in a week, in which case the
+                      # early part of the week gets missed.
+                      # See README → "arXiv coverage".
 
   # News, articles, blogs, newsletters, and release feeds (RSS/Atom).
   # Add or remove freely — anything with a feed URL works.
@@ -80,11 +103,11 @@ sources:
     # - name: vLLM releases
     #   url: https://github.com/vllm-project/vllm/releases.atom
 
-  # Reddit — top posts of the day from each subreddit, via the official API.
+  # Reddit — top posts of the week from each subreddit, via the official API.
   # Requires REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET (see README). If those
   # aren't set, Reddit is simply skipped. Remove any subs you don't want.
   reddit:
-    top_period: day   # hour | day | week
+    top_period: week  # hour | day | week — matches the weekly cadence
     per_sub: 12
     subreddits:
       - MachineLearning
